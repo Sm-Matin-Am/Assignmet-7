@@ -8,6 +8,12 @@
 #define DELETE "DELETE"
 #define GET "GET"
 #define ARG_NOT_FOUND ""
+#define PUB_REPLAY 'P'
+#define FILM_REGISTERATION 'R'
+#define FOLLOW 'F'
+#define BUY 'B'
+#define RATE 'S'
+#define COMMENT 'C'
 #define DEFAULT_ID 0
 
 const std::vector<std::string> CORRECT_COMMAND_TITLES = { POST, PUT, DELETE, GET }; 
@@ -107,24 +113,37 @@ class Message
 {
 public:
 	Message(std::string _content);
-	std::string publisherReplayM(Publisher* pub);
-	std::string newFilmM(publisher* pub);
-	std::string followM(Customer* user);
-	std::string 
+	Message(char type, std::string name, int id);
 protected:////////////////////////////////////////////////////////////////////////////////
 	std::string content;
 };
 
 Message::Message(std::string _content) { content = _content; }
-
+/*
+Message::Message(char type, Customer* sender)
+{
+	std::string senderInfo = "Publisher " + name + " with id " +
+	switch(type) {
+		case PUB_REPLAY:
+			content =  
+		case FILM_REGISTERATION:
+		case FOLLOW:
+		case BUY:
+		case RATE:
+		case COMMENT:
+	}
+}
+*/
 class Comment
 {
 private:
 	int id;
 	std::string commentText;
-	std::map<int, Comment*> replay;
+	// std::map<int, Comment*> replay;
+	std::vector<Comment*> replies;
 public:
 	Comment(std::string _content, int _id);
+	void putReplay(Comment* replay);
 };
 
 Comment::Comment(std::string _content, int _id)
@@ -132,6 +151,8 @@ Comment::Comment(std::string _content, int _id)
 	commandText = _content;
 	id = _id;
 }
+
+void Comment::putReplay(Comment* replay) { replies.push_back(replay); }
 
 class Film
 {
@@ -248,14 +269,18 @@ public:
 	// void follow(Customer* pub);//////////////////////////////////////////////////////////////////////////publisher* or customer*
 	void sendMessage(Customer* reciever, std::string messageContent);
 	void recieveMessage(Message* newMessage);
+	void buyFilm(Film* film);
+	void increaseMoney(int amount);
 	std::string getEmail(void);
 	std::string getUsername(void);
+	Film* searchInPurchasedFilms(int filmId);
 	virtual Film* searchInPublishedFilms(int filmId);
 	virtual void addFollower(Customer* newFollower);
 	virtual void editFilm(std::map<std::string, std::string> argumantsToChange);
 	virtual void addFilm(Film* newFilm);
 	virtual void deleteFilm(int id);
 	virtual void showFollowers(void);
+	virtual void replayCommand()
 };
 
 bool Customer::operator==(const Customer& c) const
@@ -274,9 +299,19 @@ Customer::Customer(std::string _email, std::string _username, std::string _passw
 	age = _age;
 }
 
+void Customer::increaseMoney(int amount) { money += amount; }
+
 Film* Customer::searchInPublishedFilms(int filmId)
 {
 	throw new PermissionDenied();
+}
+
+Film* Customer::searchInPurchasedFilms(int filmId)
+{
+	for (int k = 0; k < purchasedFilms.size(); ++k)
+		if (filmId == purchasedFilms[k]->getId())
+			return purchasedFilms[k];
+	throw new BadRequest();
 }
 
 bool Customer::checkLoginInfo(std::string _username, std::string _password)
@@ -287,7 +322,9 @@ bool Customer::checkLoginInfo(std::string _username, std::string _password)
 }
 
 std::string Customer::getEmail(void) { return email; }
+
 std::string Customer::getUsername(void) { return username; }
+
 void Customer::getId(void) { return id; }
 
 void Customer::addFilm(Film* newFilm)
@@ -319,6 +356,8 @@ void Customer::sendMessage(Customer* reciever, std::string messageContent)
 
 void Customer::recieveMessage(Message* newMessage) { inbox.push_back(newMessage); }
 
+void Customer::buyFilm(Film* film) { purchasedFilms.push_back(film); }
+
 class Publisher : public Customer
 {
 private:
@@ -328,9 +367,9 @@ public:
 	Publisher(std::string _email, std::string _username, std::string _password, int _age, int _id);
 	void sortFollowers(void);
 	void sendMessageTofollowers(void);
+	virtual Film* searchInPublishedFilms(int filmId);
 	virtual void addFollower(Customer* newFollower);
 	virtual void editFilm(std::map<std::string, std::string> argumantsToChange);
-	virtual Film* searchInPublishedFilms(int filmId);
 	virtual void addFilm(Film* newFilm);
 	virtual void deleteFilm(int id);
 	virtual void showFollowers(void);
@@ -342,7 +381,7 @@ Publisher::Publisher(std::string _email, std::string _username, std::string _pas
 void Publisher::addFilm(Film* newFilm)
 {
 	publishedFilms.push_back(newFilm);
-	// this->sendMessageTofollowers();
+	// this->sendMessageTofollowers();????????????????????????????????????????????????????????????????????
 }
 
 Film* Publisher::searchInPublishedFilms(int filmId)
@@ -400,7 +439,7 @@ void Publisher::showFollowers(void)
 void Publisher::addFollower(Customer* newFollower)
 {
 	followers.push_back(newFollower);
-	// send massage........
+	// send massage??????????????????????????????????????????????????????????????
 }
 
 Customer* NO_USER = new Customer("-", "-", "-", 0, 0);
@@ -409,6 +448,7 @@ class SystemInterface
 {
 public:
 	SystemInterface();
+	Film* findFilmById(int id);
 	void analizeInput(std::string);
 	void checkTitleOfCommand(std::string);
 	void checkBodyOfCommand(std::string);
@@ -425,10 +465,11 @@ public:
 	void login(void);
 	void addFilm(void);
 	void handleSignupErrors(void);
+	void sellFilm(int filmId);
 private:
 	int money;
-	std::map<int, Customer*> registeredCustomers;
-	// std::vector<Customer*> registeredCustomers;
+	// std::map<int, Customer*> registeredCustomers;
+	std::vector<Customer*> registeredCustomers;
 	Customer* currentUser;
 	CommandDetails commandDetails;
 	IdSeter* idManager;
@@ -487,12 +528,14 @@ void SystemInterface::processPostCommands(void)
 	}
 	else if (commandText == "money") {
 		if (commandDetails.arguments.empty())
-		else 
+		else
+			currentUser->increaseMoney(stoi(commandDetails.argumants.begin()->second));
 	}
 	else if (commandText == "replies")
 	else if (commandText == "followers")
 		currentUser->follow(stoi(commandDetails.arguments.begin()->second));
 	else if (commandText == "buy")
+		this->sellFilm(commandDetails.argumants.begin()->second);
 	else if (commandText == "rate")
 	else if (commandText == "comments")
 	else
@@ -508,6 +551,7 @@ void SystemInterface::processPostCommands(void)
 	void SystemInterface::processDeleteCommands(void)
 	{
 		if (commandDetails.command == "films") {
+			this->findFilmById(stoi(commandDetails.arguments.begin()->second));
 			currentUser->deleteFilm(stoi(commandDetails.arguments.begin()->second));
 			filmBox.deleteFilm(stoi(commandDetails.arguments.begin()->second));
 		}
@@ -597,9 +641,9 @@ void SystemInterface::login(void)
 	}
 	if (username.empty() || password.empty())
 		throw new BadRequest();
-	for (auto itr = registeredCustomers.begin(); itr != registeredCustomers.end(); ++itr)
-			if (itr->second->checkLoginInfo(username, password)) {
-				currentUser = itr->second;
+	for (int j = 0; j < registeredCustomers.size(); j++)
+		if (registeredCustomers[j]->checkLoginInfo[username, password]) {
+				currentUser = registeredCustomers[j];
 				return;
 			}
 	std::cout << "OK" << std::endl;
@@ -648,7 +692,21 @@ void SystemInterface::followPub(int id)
 			currentUser->sendMessage(registeredCustomers[i], );
 			return;
 		}
-	throw new BadRequest();
+	throw new NotFound();
+}
+
+void SystemInterface::sellFilm(int filmId)
+{
+	currentUser->buyFilm(this->findFilmById(filmId));
+	//send message to pub ?????????????????????????????????????????????????????????????????
+}
+
+Film* SystemInterface::findFilmById(int id)
+{
+	for (int i = 0; i < filmBox.size(); i++)
+		if (filmBox[i].getId == filmId)
+			return filmBox[i];
+	throw new NotFound();
 }
 
 std::vector<std::string> separateInput(std::string inputLine)
@@ -669,6 +727,10 @@ std::vector<std::string> separateInput(std::string inputLine)
 	}
 	return separatedCommand;
 }
+
+std::vector<Film*> FilmRepository::search(std::string name = "", int price = -1, 
+										  int min_year = 0, int max_year = 10000, 
+										  int min_rate = 0, std::string director = "")
 
 void handleInputErrors(std::vector<std::string> separatedCommand)
 {
