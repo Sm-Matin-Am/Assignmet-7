@@ -830,7 +830,7 @@ public:
 	void signup(void);
 	void login(void);
 	void addFilm(void);
-	void handleSignupErrors(void);
+	std::vector<std::string>  handleSignupErrors(void);
 	void sellFilm(void);
 	void putComment(void);
 	void searchFilms(std::vector<Film*> films);
@@ -1007,7 +1007,7 @@ void SystemInterface::putComment(void)
 
 void SystemInterface::checkAccessibilityLevel(void)
 {
-	if (currentUser == NO_USER && (commandDetails.command != "signup" || commandDetails.command != "login"))
+	if (currentUser == NO_USER && commandDetails.command != "signup" && commandDetails.command != "login")
 		throw new PermissionDenied();
 }
 
@@ -1023,40 +1023,28 @@ void SystemInterface::checkBodyOfCommand(std::string commandBody)
 
 void SystemInterface::checkDuplicationOfUsername(std::string newUsername)
 {
-	// for (auto itr = registeredCustomers.begin(); itr != registeredCustomers.end(); ++itr)
-	// 	if (itr->second->getUsername() == newUsername)
-	// 		return;
 	for (int i = 0; i < registeredCustomers.size(); i++)
 		if (registeredCustomers[i]->getUsername() == newUsername)
-			return;
-	throw new BadRequest();
+			throw new BadRequest();
+	return;
 }
 
 void SystemInterface::signup(void)
 {
-	this->handleSignupErrors();
+	std::vector<std::string> sortedArguments = this->handleSignupErrors();
 	int userId;
 	std::string customerType = getArgument("publisher", commandDetails.arguments);
 	if (customerType == ARG_NOT_FOUND || customerType == "false") {
 		userId = idManager->makeNewUserId();
-		currentUser = new Customer(getArgument("email", commandDetails.arguments), getArgument("username", commandDetails.arguments), 
-																				   getArgument("password", commandDetails.arguments), 
-																				   std::stoi(getArgument("age", commandDetails.arguments)), 
-																				   userId);
-		// registeredCustomers.insert(std::pair<int, Customer*>(userId, currentUser));
+		currentUser = new Customer(sortedArguments[0], sortedArguments[1], sortedArguments[2], std::stoi(sortedArguments[3]), userId);
 	}
 	else if (customerType == "true") {
 		userId = idManager->makeNewUserId();
-		currentUser = new Publisher(getArgument("email", commandDetails.arguments), getArgument("username", commandDetails.arguments), 
-																				    getArgument("password", commandDetails.arguments), 
-																				    std::stoi(getArgument("age", commandDetails.arguments)), 
-																				    userId);
-		// registeredCustomers.insert(std::pair<int, Customer*>(userId, currentUser));
+		currentUser = new Publisher(sortedArguments[0], sortedArguments[1], sortedArguments[2], std::stoi(sortedArguments[3]), userId);
 	}
 	else
 		throw new BadRequest();
 	
-	// registeredCustomers.insert(std::pair<int, Customer*>(userId, currentUser));
 	registeredCustomers.push_back(currentUser);
 	accounts.addAccount(userId);///////////////////////////************************************************************
 	std::cout << "OK" << std::endl;
@@ -1064,13 +1052,6 @@ void SystemInterface::signup(void)
 
 void SystemInterface::login(void)
 {
-	// std::string username, password;
-	// for (auto itrCD = commandDetails.arguments.begin(); itrCD != commandDetails.arguments.end(); itrCD++) {
-	// 	if (itrCD->first == "username")
-	// 		username = itrCD->second;
-	// 	if (itrCD->first == "password")
-	// 		password = itrCD->second;
-	// }
 	std::vector<std::string> sortedArguments = sortArguments(LOGIN_ARGUMENTS);
 	if (sortedArguments.size() != 2)
 		throw new BadRequest();
@@ -1082,43 +1063,35 @@ void SystemInterface::login(void)
 	std::cout << "OK" << std::endl;
 }
 
-void SystemInterface::handleSignupErrors()
+std::vector<std::string> SystemInterface::handleSignupErrors()
 {
-	// bool found = false;
-	// if (commandDetails.arguments.size() != 4 && commandDetails.arguments.size() != 5)
-		// throw new BadRequest();
-	// for (auto itr = commandDetails.arguments.begin(); itr != commandDetails.arguments.end(); itr++) {
-	// 	for (int i = 0; i < SIGNUP_ARGUMENTS.size(); ++i) {
-	// 		if (itr->first == SIGNUP_ARGUMENTS[i]) {
-	// 			found = true;
-	// 			break;
-	// 		}
-	// 		if (i == 1)
-	// 			this->checkDuplicationOfUsername(itr->second);
-	// 	}
-	// 	if (found == false)
-	// 		throw new BadRequest();
-	// }
 	std::vector<std::string> sortedArguments = sortArguments(SIGNUP_ARGUMENTS);
 	if (sortedArguments.size() != 4 && sortedArguments.size() != 5)
 		throw new BadRequest();
 	this->checkDuplicationOfUsername(sortedArguments[1]);
-	// return sortedArguments;
+	return sortedArguments;
 }
 
-std::string findArgument(std::vector<std::string> listOfArgs, std::map<std::string, std::string>::iterator arg)
+void findArgument(std::vector<std::string> listOfArgs, std::map<std::string, std::string>::iterator arg, 
+															  std::vector<std::string>& sortedArguments)
 {
 	for (int i = 0; i < listOfArgs.size(); ++i)
-		if (listOfArgs[i] == arg->first)
-			return arg->second;
-	throw new BadRequest();//???????????not found?????????????????????????????????????????????????????????????????????????
+		if (listOfArgs[i] == arg->first) {
+			sortedArguments[i] = arg->second;
+			return;
+		}
+	if (arg->first != "Publisher")
+		throw new BadRequest();//???????????not found?????????????????????????????????????????????????????????????????????????
+	return;
 }
 
 std::vector<std::string> SystemInterface::sortArguments(std::vector<std::string> neededArguments)
 {
 	std::vector<std::string> sortedArguments;
+	for (int j = 0; j < neededArguments.size(); j++)
+		sortedArguments.push_back("");
 	for (auto itr = commandDetails.arguments.begin(); itr != commandDetails.arguments.end(); itr++)
-		sortedArguments.push_back(findArgument(FILM_ARGUMENTS, itr));
+		findArgument(neededArguments, itr, sortedArguments);
 	return sortedArguments;	
 }
 
@@ -1198,7 +1171,7 @@ std::vector<std::string> separateInput(std::string inputLine)
 
 void handleInputErrors(std::vector<std::string> separatedCommand)
 {
-	if ((!(separatedCommand.size() % 2) && separatedCommand.size() != 0) || separatedCommand.size() == 3)
+	if ((!(separatedCommand.size() % 2) && separatedCommand.size() != 0) || separatedCommand.size() == 3 || separatedCommand.size() == 5)
 		return;
 	throw new BadRequest();  
 }
@@ -1212,7 +1185,7 @@ void SystemInterface::analizeInput(std::string inputCommand)
 	this->checkBodyOfCommand(separatedCommand[1]);
 
 	if (inputCommand.find('?') != std::string::npos && separatedCommand.size() > 2)
-		for (int k = 2; k < separatedCommand.size(); k *= 2) {
+		for (int k = 2; k < separatedCommand.size(); k += 2) {
 			// this->checkArguments(separatedCommand[k], separatedCommand[k + 1]);
 			commandDetails.arguments.insert(std::pair<std::string, std::string>(separatedCommand[k], separatedCommand[k + 1]));
 		}
