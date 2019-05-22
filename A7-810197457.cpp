@@ -529,22 +529,24 @@ void Customer::buyFilm(Film* film)
 		throw new PermissionDenied();
 	money -= film->getPrice();
 	purchasedFilms.push_back(film); 
-	std::string messageContent = "User " + username + " with id " + std::to_string(id) + " buy your film " + film->getName() + "with id " + std::to_string(film->getId()) + ".";
-	this->sendMessage(film->getPub(), messageContent);//************ to whom?????????????????????????/
+	// std::string messageContent = "User " + username + " with id " + std::to_string(id) + " buy your film " + film->getName() + "with id " + std::to_string(film->getId()) + ".";
+	// this->sendMessage(film->getPub(), messageContent);//************ to whom?????????????????????????/
 }
 
 std::vector<Film*> Customer::getPublishedFilms(void) { throw new PermissionDenied(); }
 
 std::vector<Film*> Customer::getPurchasedFilms(void) { return purchasedFilms; }
 
-void Customer::putComment(Film* film, std::string commentText, int _id)
-{
-	int filmId;
+// void Customer::putComment(Film* film, std::string commentText, int _id)
+// {
+	// int filmId;
 	// Film* film = findFilmById(std::stoi(info.begin()->second));
-	film->addNewComment(commentText, _id);
-	std::string messageContent = "User " + username + " with id " + std::to_string(id) + " comment on your film " + film->getName() + " with id " + std::to_string(film->getId());
-	this->sendMessage(film->getPub(), messageContent);
-}
+	// film->addNewComment(commentText, _id);
+	// std::string messageContent = "User " + username + " with id " + std::to_string(id) + " comment on your film " + film->getName() + " with id " + std::to_string(film->getId());
+	// this->sendMessage(film->getPub(), messageContent);
+	// Message* newMessage = new Message(messageContent);
+	// film->getPub()->recieveMessage(newMessage);
+// }
 
 void Customer::replayComment(int filmId, int commentId, std::string replayContent) { throw new PermissionDenied(); }
 
@@ -829,8 +831,8 @@ public:
 	void login(void);
 	void addFilm(void);
 	void handleSignupErrors(void);
-	// void sellFilm(int filmId);
-	// void putComment(void);
+	void sellFilm(void);
+	void putComment(void);
 	void searchFilms(std::vector<Film*> films);
 	void calcPortionOfSystem(Film* film);
 private:
@@ -905,18 +907,14 @@ void SystemInterface::processPostCommands(void)
 	}
 	else if (commandText == "followers")
 		this->followPub(std::stoi(commandDetails.arguments.begin()->second));//*******************************currentUser or this
-	else if (commandText == "buy") {
-		currentUser->buyFilm(this->findFilmById(std::stoi(commandDetails.arguments.begin()->second)));
-		this->calcPortionOfSystem(this->findFilmById(std::stoi(commandDetails.arguments.begin()->second)));
-	}
+	else if (commandText == "buy")
+		this->sellFilm();
 	else if (commandText == "rate") {
 		std::vector<std::string> sortedArguments = this->sortArguments(RATE_ARGUMENTS);
 		findFilmById(std::stoi(sortedArguments[0]))->addScore(currentUser->getId(), std::stoi(sortedArguments[1]));
 	}
-	else if (commandText == "comments") {
-		std::vector<std::string> sortedArguments = this->sortArguments(COMMENT_ARGUMENTS);
-		currentUser->putComment(findFilmById(std::stoi(sortedArguments[0])), sortedArguments[1], idManager->makeNewCommentId());
-	}
+	else if (commandText == "comments")
+		this->putComment();
 	else
 		throw new NotFound();
 }
@@ -984,6 +982,27 @@ void SystemInterface::searchFilms(std::vector<Film*> films)
 			searchResault[j]->printInfo();
 		}
 	}
+}
+
+void SystemInterface::sellFilm(void)
+{
+	Film* film = this->findFilmById(std::stoi(commandDetails.arguments.begin()->second));
+	currentUser->buyFilm(film);
+	this->calcPortionOfSystem(film);
+	std::string messageContent = "User " + currentUser->getUsername() + " with id " + std::to_string(currentUser->getId()) + " buy your film " + film->getName() + "with id " + std::to_string(film->getId()) + ".";
+	Message* newMessage = new Message(messageContent);
+	film->getPub()->recieveMessage(newMessage);
+}
+
+void SystemInterface::putComment(void)
+{
+	std::vector<std::string> sortedArguments = this->sortArguments(COMMENT_ARGUMENTS);
+	Film* film = findFilmById(std::stoi(sortedArguments[0]));
+	// currentUser->putComment(film, sortedArguments[1], idManager->makeNewCommentId());
+	film->addNewComment(sortedArguments[1], idManager->makeNewCommentId());
+	std::string messageContent = "User " + currentUser->getUsername() + " with id " + std::to_string(currentUser->getId()) + " comment on your film " + film->getName() + " with id " + std::to_string(film->getId());
+	Message* newMessage = new Message(messageContent);
+	film->getPub()->recieveMessage(newMessage);
 }
 
 void SystemInterface::checkAccessibilityLevel(void)
