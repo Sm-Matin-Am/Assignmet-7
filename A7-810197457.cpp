@@ -30,11 +30,12 @@ const std::vector<std::string> CORRECT_COMMAND_BODIES = { "signup", "login", "fi
 														"notifications",  "notifications read" };
 const std::vector<std::string> SIGNUP_ARGUMENTS = { "email", "username", "password", "age", "publisher" };
 const std::vector<std::string> FILM_ARGUMENTS = { "name", "year", "length" , "price", "summary", "director" };
-const std::vector<std::string> SERACH_FIELDS = { "name", "price", "min_year", "max_year", "min_rate", "director" };
+const std::vector<std::string> SEARCH_FIELDS = { "name", "price", "min_year", "max_year", "min_rate", "director" };
 const std::vector<std::string> LOGIN_ARGUMENTS = { "username", "password" };
 const std::vector<std::string> REPLAY_ARGUMENTS = { "film_id", "comment_id", "content" };
 const std::vector<std::string> RATE_ARGUMENTS = { "film_id", "score" };
 const std::vector<std::string> COMMENT_ARGUMENTS = { "film_id", "content" };
+const std::vector<std::string> BLANK_FIELDS = { "", std::to_string(NO_PRICE_FILTER), "0", "10000", "0", "" };
 
 std::string getArgument(std::string arg, std::map<std::string, std::string> map)
 {
@@ -65,11 +66,11 @@ IdSeter::IdSeter(void)
 	maxUserId = 0;
 }
 
-int IdSeter::makeNewCommentId(void) { return maxCommentId++; }
+int IdSeter::makeNewCommentId(void) { return ++maxCommentId; }
 
-int IdSeter::makeNewUserId(void) { return maxUserId++; }
+int IdSeter::makeNewUserId(void) { return ++maxUserId; }
 
-int IdSeter::makeNewFilmId(void) { return maxFilmId++; }
+int IdSeter::makeNewFilmId(void) { return ++maxFilmId; }
 // void IdSeter::decFilmId(void) { maxFilmId--; }
 
 std::string deleteWhiteSpacesAtBegin(std::string& input)
@@ -240,6 +241,8 @@ Film::Film(Publisher* pub, std::string _name, int _year, int _length, int _price
 	price = _price;
 	summary = _summary;
 	director = _director;
+	totalScore = 0;
+	score = 0;
 }
 
  std::map<int, int>::iterator Film::hasRatedBefore(int userId)
@@ -303,7 +306,7 @@ bool Film::checkFilters(std::string _name, int _price, int min_year, int max_yea
 		return false;
 	if (score < min_rate)
 		return false;
-	if (!director.empty() && _director != director)
+	if (!_director.empty() && _director != director)
 		return false;
 	return true;
 }
@@ -342,11 +345,12 @@ void Film::setId(int _id) { id = _id; }
 
 void Film::printInfo(void)
 {
-	std::cout << id << " | " << name << " | " << length << " | " << price << " | " << std::setprecision(2) << score << year << " | " <<  director << std::endl;
+	std::cout << id << " | " << name << " | " << length << " | " << price << " | " << std::setprecision(2) << score << " | " << year << " | " << director << std::endl;
 }
 
 void Film::showDetails(void)
 {
+	std::cout << "Details of Film " << name << std::endl;
 	std::cout << "Id = " << id << std::endl;
 	std::cout << "Director = " << director << std::endl;
 	std::cout << "Length = " << length << std::endl;
@@ -409,7 +413,7 @@ public:
 	void increaseMoney(int amount);
 	void showMessages(void);
 	void showUnreadMessages(int limit);
-	void putComment(Film* film, std::string commentText, int _id);
+//	void putComment(Film* film, std::string commentText, int _id);
 	std::string getEmail(void);
 	std::string getUsername(void);
 	std::vector<Film*> getPurchasedFilms(void);
@@ -439,6 +443,7 @@ Customer::Customer(std::string _email, std::string _username, std::string _passw
 	username = _username;
 	password = _password;
 	age = _age;
+	money = 0;
 }
 
 void Customer::deleteComment(int id) { throw new PermissionDenied(); }
@@ -489,7 +494,7 @@ bool Customer::checkLoginInfo(std::string _username, std::string _password)
 {
 	if (username == _username && password == _password)
 		return true;
-	throw new BadRequest();
+	return false;
 }
 
 std::string Customer::getEmail(void) { return email; }
@@ -674,27 +679,18 @@ Customer* NO_USER = new Customer("-", "-", "-", 0, 0);
 class FilmRepository
 {
 private:
-	// std::map<int, Film*> films;
 	std::vector<Film*> films;
-	std::vector<Film*> topFilms; // (4)
+	std::vector<Film*> topFilms;
 public:
 	void addFilm(Film* film);
-	// void edit if once I changed it in publisher map it may dont need to be changed here again
 	void deleteFilm(int id);
 	void findTopFilms(void);
 	void showTopFilms(Customer* user);
 	Film* chooseOlder(int& indexOfBestFilm, int k, std::vector<Film*> allFilms);
-	// std::vector<Film*> search(std::string name = "", int price = NO_PRICE_FILTER, 
-	// 									  int min_year = 0, int max_year = 10000, 
-	// 									  int min_rate = 0, std::string director = "");
 	std::vector<Film*> getFilms(void);
 };
 
-void FilmRepository::addFilm(Film* film)
-{
-	// films.insert(std::pair<int, Film*>(id, film));
-	films.push_back(film);
-}
+void FilmRepository::addFilm(Film* film) { films.push_back(film); }
 
 void FilmRepository::deleteFilm(int id)
 {
@@ -707,8 +703,8 @@ void FilmRepository::deleteFilm(int id)
 
 Film* FilmRepository::chooseOlder(int& indexOfBestFilm, int k, std::vector<Film*> allFilms)
 {
-	if (indexOfBestFilm < k) {
-		allFilms[indexOfBestFilm] = allFilms[k];
+	if (indexOfBestFilm > k) {
+//		allFilms[indexOfBestFilm] = allFilms[k];
 		indexOfBestFilm = k;
 	}
 	return allFilms[indexOfBestFilm];
@@ -718,19 +714,21 @@ void FilmRepository::findTopFilms(void)
 {
 	std::vector<Film*> allFilms = films;
 	int indexOfBestFilm = 0;
-	Film* Bestfilm = allFilms[indexOfBestFilm];
+	Film* Bestfilm;
 	for (int i = 0; i < films.size(); ++i) {
-		for (int k = 1, i = 0; k < allFilms.size() && i < 4; k++, i++) {
-			if (allFilms[k] > Bestfilm) {
+		Bestfilm = allFilms[0];
+		for (int k = 1; k < allFilms.size(); k++) {
+			if (allFilms[k]->getScore() > Bestfilm->getScore()) {
 				Bestfilm = allFilms[k];
 				indexOfBestFilm = k;
 			}
-			else if (allFilms[k] == Bestfilm)
+			else if (allFilms[k]->getScore() == Bestfilm->getScore())
 				Bestfilm = this->chooseOlder(indexOfBestFilm, k, allFilms);
 		}
 		// topFilms[i] = Bestfilm;
 		topFilms.push_back(Bestfilm);
 		allFilms.erase(allFilms.begin() + indexOfBestFilm);
+		indexOfBestFilm = 0;
 	}
 }
 
@@ -741,24 +739,13 @@ void FilmRepository::showTopFilms(Customer* user)
 		if (user->alreadyHasBoughtFilm(topFilms[i]))
 			topFilms.erase(topFilms.begin() + i);
 	std::cout << "#. Film Id | Film Name | Film Lenght | Film Director" << std::endl;
-	for (int j = 0; j < 4; j++)
+	for (int j = 0; j < 4 && j < topFilms.size(); j++)
 		std::cout << j + 1 << ". " << topFilms[j]->getId()
 				  << " | " << topFilms[j]->getName()
 				  << " | " << topFilms[j]->getLength() 
 				  <<  " | " << topFilms[j]->getDirector()
 				  << std::endl;
 }
-
-// std::vector<Film*> FilmRepository::search(std::string name = "", int price = NO_PRICE_FILTER, 
-// 										  int min_year = 0, int max_year = 10000, 
-// 										  int min_rate = 0, std::string director = "")
-// {
-// 	std::vector<Film*> searchResault = films;
-// 	for (int i = 0; i < films.size(); i++)
-// 		if (!films[i]->checkFilters(name, price, min_year, max_year, min_rate, director))//??????????????????????????????????????????????????????????????????
-// 			searchResault.erase(searchResault.begin() + i);
-// 	return searchResault;
-// }
 
 std::vector<Film*> search(std::vector<Film*> films, std::string name = "", int price = NO_PRICE_FILTER, 
 										  int min_year = 0, int max_year = 10000, 
@@ -837,19 +824,19 @@ public:
 	void calcPortionOfSystem(Film* film);
 private:
 	int money;
-	// std::map<int, Customer*> registeredCustomers;
 	std::vector<Customer*> registeredCustomers;
 	Customer* currentUser;
-	CommandDetails commandDetails;////////****************************************************
+	CommandDetails commandDetails;
 	IdSeter* idManager;
-	FilmRepository* filmBox;
-	Bank accounts;//////////****************************************
+	FilmRepository filmBox;
+	Bank accounts;
 };
 
 SystemInterface::SystemInterface(void)
 	: currentUser(NO_USER)
 {
 	idManager = new IdSeter();
+	money = 0;
 }
 
 void SystemInterface::processInput(std::string inputCommand)
@@ -861,7 +848,6 @@ void SystemInterface::processInput(std::string inputCommand)
 		std::cout << ex->what() << std::endl;
 	}
 	commandDetails.clear();
-//	std::cout << "OK" << std::endl;
 }
 
 void SystemInterface::checkTitleOfCommand(std::string _title)
@@ -898,15 +884,17 @@ void SystemInterface::processPostCommands(void)
 	else if (commandText == "money") {
 		if (commandDetails.arguments.empty())
 			currentUser->increaseMoney(this->accounts.withdraw(currentUser->getId()));
-		else
+		else {
 			currentUser->increaseMoney(std::stoi(commandDetails.arguments.begin()->second));
+			std::cout << "OK" << std::endl;
+		}
 	}
 	else if (commandText == "replies") {
 		std::vector<std::string> sortedArguments = this->sortArguments(REPLAY_ARGUMENTS);
 		currentUser->replayComment(std::stoi(sortedArguments[0]), std::stoi(sortedArguments[1]), sortedArguments[2]);
 	}
 	else if (commandText == "followers")
-		this->followPub(std::stoi(commandDetails.arguments.begin()->second));//*******************************currentUser or this
+		this->followPub(std::stoi(commandDetails.arguments.begin()->second));
 	else if (commandText == "buy")
 		this->sellFilm();
 	else if (commandText == "rate") {
@@ -921,8 +909,10 @@ void SystemInterface::processPostCommands(void)
 
 void SystemInterface::processPutCommands(void)
 {
-	if (commandDetails.command == "films")
+	if (commandDetails.command == "films") {
 		currentUser->editFilm(commandDetails.arguments);
+		std::cout << "OK" << std::endl;
+	}
 	else
 		throw new NotFound();
 }
@@ -932,7 +922,8 @@ void SystemInterface::processDeleteCommands(void)
 	if (commandDetails.command == "films") {
 		this->findFilmById(std::stoi(commandDetails.arguments.begin()->second));
 		currentUser->deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
-		filmBox->deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
+		filmBox.deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
+		std::cout << "OK" << std::endl;
 	}
 	else if (commandDetails.command == "comments")
 		currentUser->deleteComment(std::stoi(commandDetails.arguments.begin()->second));
@@ -947,7 +938,7 @@ void SystemInterface::processGetCommands(void)
 	else if (commandDetails.command == "published")
 		this->searchFilms(currentUser->getPublishedFilms());
 	else if (commandDetails.command == "films")
-		this->searchFilms(filmBox->getFilms());
+			this->searchFilms(filmBox.getFilms());
 	else if (commandDetails.command == "purchased")
 		this->searchFilms(currentUser->getPurchasedFilms());
 	else if (commandDetails.command == "notifications")
@@ -960,27 +951,22 @@ void SystemInterface::processGetCommands(void)
 
 void SystemInterface::searchFilms(std::vector<Film*> films)
 {
-	std::vector<std::string> sortedArguments = {"", std::to_string(NO_PRICE_FILTER), "0", "0", "0", "" };
-	sortedArguments = sortArguments(SERACH_FIELDS);
-	if (commandDetails.arguments.begin()->first == "film_id") {
+	if (!commandDetails.arguments.empty() && commandDetails.arguments.begin()->first == "film_id") {
 		this->findFilmById(std::stoi(commandDetails.arguments.begin()->second))->showDetails();
-		filmBox->showTopFilms(currentUser);
+		filmBox.showTopFilms(currentUser);
+		return;
 	}
-	else
-	{//ddddddddddddddddddduuuuuuuuuuuuuuuuuuuuuuppppppppppppppppppppllllllllllllllllllliiiiiiiiiiiiiiiiiccccccccccccaaaaaaaaaaaaaattttttttttttttteeeeeeeeeeeeedddddddddddddddddddd
-		// for (auto itr = commandDetails.arguments.begin(); itr != commandDetails.arguments.end(); itr++)
-		// 	for (int i = 0; i < SERACH_FIELDS.size(); i++)
-		// 		if (SERACH_FIELDS[i] == itr->first)
-		// 			sortedArguments[i] = itr->second;
-		// // std::string searchResault = filmBox->search(sortedArguments[0], sortedArguments[1], sortedArguments[2], sortedArguments[3], sortedArguments[4], sortedArguments[5]);
-		std::vector<Film*> searchResault = search(films, sortedArguments[0], std::stoi(sortedArguments[1]), 
-												  std::stoi(sortedArguments[2]), std::stoi(sortedArguments[3]), 
-												  std::stoi(sortedArguments[4]), sortedArguments[5]);
-		std::cout << "Film Id | Film Name | Film Length | Film price | Rate | Production Year | Film Director" << std::endl;
-		for (int j = 0; j < searchResault.size(); ++j) {
-			std::cout << j + 1 << ". ";
-			searchResault[j]->printInfo();
-		}
+	std::vector<std::string> sortedArguments = sortArguments(SEARCH_FIELDS);
+	for (int k = 0; k < BLANK_FIELDS.size(); k++)
+		if (sortedArguments[k].empty())
+			sortedArguments[k] = BLANK_FIELDS[k];
+	std::vector<Film*> searchResault = search(films, sortedArguments[0], std::stoi(sortedArguments[1]),
+		std::stoi(sortedArguments[2]), std::stoi(sortedArguments[3]),
+		std::stoi(sortedArguments[4]), sortedArguments[5]);
+	std::cout << "#. Film Id | Film Name | Film Length | Film price | Rate | Production Year | Film Director" << std::endl;
+	for (int j = 0; j < searchResault.size(); ++j) {
+		std::cout << j + 1 << ". ";
+		searchResault[j]->printInfo();
 	}
 }
 
@@ -1058,9 +1044,9 @@ void SystemInterface::login(void)
 	for (int j = 0; j < registeredCustomers.size(); j++)
 		if (registeredCustomers[j]->checkLoginInfo(sortedArguments[0], sortedArguments[1])) {
 				currentUser = registeredCustomers[j];
+				std::cout << "OK" << std::endl;
 				return;
 			}
-	std::cout << "OK" << std::endl;
 }
 
 std::vector<std::string> SystemInterface::handleSignupErrors()
@@ -1098,16 +1084,12 @@ std::vector<std::string> SystemInterface::sortArguments(std::vector<std::string>
 void SystemInterface::addFilm(void)
 {
 	std::vector<std::string> sortedArguments = this->sortArguments(FILM_ARGUMENTS);
-	// for (int i = 0; i < FILM_ARGUMENTS.size(); i++)
-	// 	sortedArguments.push_back(getArgument(FILM_ARGUMENTS[i], commandDetails.arguments));
-
-	// Film* newFilm = new Film(currentUser, sortedArguments[0], sortedArguments[1], 
-	// 						 sortedArguments[2], sortedArguments[3], 
-	// 						 sortedArguments[4], sortedArguments[5], 
-	// 						 DEFAULT_ID);
+	for (int i = 0; i < sortedArguments.size(); i++)
+		if (sortedArguments[i].empty())
+			throw new BadRequest();
 	Film* newFilm = currentUser->addFilm(sortedArguments);
 	newFilm->setId(idManager->makeNewFilmId());
-	filmBox->addFilm(newFilm);
+	filmBox.addFilm(newFilm);
 	std::cout << "OK" << std::endl;
 }
 
@@ -1116,8 +1098,6 @@ void SystemInterface::followPub(int id)
 	for (int i = 0; i < registeredCustomers.size(); ++i)
 		if (registeredCustomers[i]->getId() == id) {
 			currentUser->follow(registeredCustomers[i]);
-			// registeredCustomers[i]->addFollower(currentUser);
-			// currentUser->sendMessage(registeredCustomers[i], );
 			return;
 		}
 	throw new NotFound();
@@ -1125,9 +1105,9 @@ void SystemInterface::followPub(int id)
 
 Film* SystemInterface::findFilmById(int id)
 {
-	for (int i = 0; i < filmBox->getFilms().size(); i++)
-		if (filmBox->getFilms()[i]->getId() == id)
-			return filmBox->getFilms()[i];
+	for (int i = 0; i < filmBox.getFilms().size(); i++)
+		if (filmBox.getFilms()[i]->getId() == id)
+			return filmBox.getFilms()[i];
 	throw new NotFound();
 }
 
@@ -1156,9 +1136,6 @@ std::vector<std::string> separateInput(std::string inputLine)
 	
 	while (foundCharPlace != -1)
 	{
-		// foundCharPlace = inputLine.find_first_of(' ', foundCharPlace + 1);
-		// separatedPiece = inputLine.substr(previousPlace + 1, foundCharPlace - previousPlace - 1);
-
 		separatedPiece = readLine(foundCharPlace, inputLine, previousPlace);
 
 		if (separatedPiece != "?")
@@ -1186,7 +1163,6 @@ void SystemInterface::analizeInput(std::string inputCommand)
 
 	if (inputCommand.find('?') != std::string::npos && separatedCommand.size() > 2)
 		for (int k = 2; k < separatedCommand.size(); k += 2) {
-			// this->checkArguments(separatedCommand[k], separatedCommand[k + 1]);
 			commandDetails.arguments.insert(std::pair<std::string, std::string>(separatedCommand[k], separatedCommand[k + 1]));
 		}
 
