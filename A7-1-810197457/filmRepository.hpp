@@ -9,13 +9,16 @@ class FilmRepository
 {
 private:
 	std::vector<Film*> films;
-	std::vector<Film*> topFilms;
+	// std::vector<Film*> topFilms;
+	std::vector<std::vector<int> > matrix;
 public:
 	void addFilm(Film* film);
 	void deleteFilm(int id);
-	void findTopFilms(void);
-	void showTopFilms(Customer* user);
-	Film* chooseOlder(int& indexOfBestFilm, int k, std::vector<Film*> allFilms);
+	void updateElements(int filmId, Customer* buyer);
+	void showRelatedFilms(Customer* user, int filmId);
+	int chooseOlder(int indexOfBestFilm, int j);
+	Film* findFilmById(int id);
+	std::vector<Film*> findRelatedFilms(int filmId);
 	std::vector<Film*> getFilms(void);
 };
 

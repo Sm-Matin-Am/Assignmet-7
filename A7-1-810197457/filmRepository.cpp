@@ -1,10 +1,22 @@
 #include "filmRepository.hpp"
 #include "film.hpp"
+#include "constValues.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
+#include <algorithm>
 
-void FilmRepository::addFilm(Film* film) { films.push_back(film); }
+void FilmRepository::addFilm(Film* film) 
+{ 
+	films.push_back(film);
+	for (int i = 0; i < matrix.size(); i++)
+		matrix[i].push_back(matrix[i][0] == DELETED ? DELETED : 0);
+	std::vector<int> newfilm(matrix.empty() ? 1 : matrix[0].size());
+	matrix.push_back(newfilm);
+	for (int i = 0; i < matrix.size(); ++i)
+		if (matrix[0][i] == DELETED)
+			matrix[matrix.size() - 1][i] = DELETED;
+}
 
 void FilmRepository::deleteFilm(int id)
 {
@@ -13,49 +25,64 @@ void FilmRepository::deleteFilm(int id)
 			films.erase(films.begin() + i);
 			break;
 		}
-}
-
-Film* FilmRepository::chooseOlder(int& indexOfBestFilm, int k, std::vector<Film*> allFilms)
-{
-	if (indexOfBestFilm > k)
-		indexOfBestFilm = k;
-	return allFilms[indexOfBestFilm];
-}
-
-void FilmRepository::findTopFilms(void)
-{
-	std::vector<Film*> allFilms = films;
-	int indexOfBestFilm = 0;
-	Film* Bestfilm;
-	for (int i = 0; i < films.size(); ++i) {
-		Bestfilm = allFilms[0];
-		for (int k = 1; k < allFilms.size(); k++) {
-			if (allFilms[k]->getScore() > Bestfilm->getScore()) {
-				Bestfilm = allFilms[k];
-				indexOfBestFilm = k;
-			}
-			else if (allFilms[k]->getScore() == Bestfilm->getScore())
-				Bestfilm = this->chooseOlder(indexOfBestFilm, k, allFilms);
-		}
-		topFilms.push_back(Bestfilm);
-		allFilms.erase(allFilms.begin() + indexOfBestFilm);
-		indexOfBestFilm = 0;
+	for (int j = 0; j < matrix.size(); j++) {
+		matrix[j][id - 1] = DELETED;
+		matrix[id - 1][j] = DELETED;
 	}
 }
 
-void FilmRepository::showTopFilms(Customer* user)
+void FilmRepository::updateElements(int filmId, Customer* buyer)
 {
-	this->findTopFilms();
-	for (int i = 0; i < topFilms.size(); ++i)
-		if (user->alreadyHasBoughtFilm(topFilms[i]))
-			topFilms.erase(topFilms.begin() + i);
+	for (int k = 0; k < matrix.size(); k++)
+		if (buyer->alreadyHasBoughtFilm(k + 1) && matrix[k][filmId - 1] != DELETED && k != filmId - 1) {
+			matrix[filmId - 1][k] += 1;
+			matrix[k][filmId - 1] += 1;
+		}
+}
+
+int FilmRepository::chooseOlder(int indexOfBestFilm, int j) { if (indexOfBestFilm > j) return j; }
+
+std::vector<Film*> FilmRepository::findRelatedFilms(int filmId)
+{
+	std::vector<Film*> relatedFilms;
+	std::vector<int> choosedIndexes;
+	int indexOfBestFilm;
+	for (int j = 0; j < matrix.size(); ++j) {
+		indexOfBestFilm = 0;
+		if (j == filmId - 1)
+			continue;
+		if (std::find(choosedIndexes.begin(), choosedIndexes.end(), j) == choosedIndexes.end())
+			continue;
+		if (matrix[filmId - 1][j] > matrix[filmId - 1][indexOfBestFilm])
+			indexOfBestFilm = j;
+		else if (matrix[filmId][j] == matrix[filmId][indexOfBestFilm])
+			indexOfBestFilm = this->chooseOlder(indexOfBestFilm, j);
+		relatedFilms.push_back(findFilmById(indexOfBestFilm + 1));
+		choosedIndexes.push_back(j);
+	}
+	return relatedFilms;
+}
+
+Film* FilmRepository::findFilmById(int id)
+{
+	for (int i = 0; i < films.size(); i++)
+		if (films[i]->getId() == id)
+			return films[i];
+}
+
+void FilmRepository::showRelatedFilms(Customer* user, int filmId)
+{
+	std::vector<Film*> relatedFilms = this->findRelatedFilms(filmId);
+	for (int k = 0; k < relatedFilms.size(); ++k)
+		if (user->alreadyHasBoughtFilm(relatedFilms[k]->getId()))
+			relatedFilms.erase(relatedFilms.begin() + k);
 	std::cout << "Recommendation Film" << std::endl;
-	std::cout << "#. Film Id | Film Name | Film Lenght | Film Director" << std::endl;
-	for (int j = 0; j < 4 && j < topFilms.size(); j++)
-		std::cout << j + 1 << ". " << topFilms[j]->getId()
-				  << " | " << topFilms[j]->getName()
-				  << " | " << topFilms[j]->getLength() 
-				  << " | " << topFilms[j]->getDirector()
+	std::cout << "#. Film Id | Film Name | Film Length | Film Director" << std::endl;
+	for (int k = 0; k < 4 && k < relatedFilms.size(); k++)
+		std::cout << k + 1 << ". " << relatedFilms[k]->getId()
+				  << " | " << relatedFilms[k]->getName()
+				  << " | " << relatedFilms[k]->getLength() 
+				  << " | " << relatedFilms[k]->getDirector()
 				  << std::endl;
 }
 
