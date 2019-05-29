@@ -16,13 +16,19 @@
 #include "message.hpp"
 #include "exceptions.cpp"
 
-Customer* NO_USER = new Customer("-", "-", "-", 0, 0);
+Customer* ADMIN = new Customer("admin@admin.com", "admin", "admin", 0, 0);
 
 SystemInterface::SystemInterface(void)
-	: currentUser(NO_USER)
+	: currentUser(ADMIN)
 {
 	idManager = new IdSeter();
 	money = 0;
+}
+
+void SystemInterface::checkIfSystemIsFree(void)
+{
+	if (currentUser != ADMIN)
+		throw new BadRequest();
 }
 
 void SystemInterface::processInput(std::string inputCommand)
@@ -52,73 +58,59 @@ void SystemInterface::processCommand(void)
 {
 	if (commandDetails.title == POST)
 		this->processPostCommands();
-	else if (commandDetails.title == PUT)
-		this->processPutCommands();
-	else if (commandDetails.title == DELETE)
-		this->processDeleteCommands();
 	else if (commandDetails.title == GET)
 		this->processGetCommands();
 	else
 		throw new BadRequest();
 }
 
+int SystemInterface::findPostCommand(void)
+{
+	for (int k = 0; k < POST_COMMANDS.size(); k++)
+		if (commandDetails.command == POST_COMMANDS[k])
+			return k;
+	throw new NotFound();
+}
+
 void SystemInterface::processPostCommands(void)
 {
-	std::string commandText = commandDetails.command;
-	if (commandText == "signup")
-		this->signup();
-	else if (commandText == "login")
-		this->login();
-	else if (commandText == "films")
-		this->addFilm();
-	else if (commandText == "money") {
-		if (commandDetails.arguments.empty())
-			currentUser->increaseMoney(this->accounts.withdraw(currentUser->getId()));
-		else {
-			currentUser->increaseMoney(std::stoi(commandDetails.arguments.begin()->second));
-			std::cout << "OK" << std::endl;
+	switch(this->findPostCommand()) 
+	{
+        case SIGNUP: this->signup();
+        case LOGIN: this->login();
+		case FILMS: this->addFilm();
+		case MONEY:
+			if (commandDetails.arguments.empty())
+				currentUser->increaseMoney(this->accounts.withdraw(currentUser->getId()));
+			else
+				currentUser->increaseMoney(std::stoi(commandDetails.arguments.begin()->second));
+		case REPLIES: 
+		{
+			std::vector<std::string> sortedArguments = this->sortArguments(REPLAY_ARGUMENTS);
+			currentUser->replayComment(std::stoi(sortedArguments[0]), std::stoi(sortedArguments[1]), sortedArguments[2]);
 		}
-	}
-	else if (commandText == "replies") {
-		std::vector<std::string> sortedArguments = this->sortArguments(REPLAY_ARGUMENTS);
-		currentUser->replayComment(std::stoi(sortedArguments[0]), std::stoi(sortedArguments[1]), sortedArguments[2]);
-	}
-	else if (commandText == "followers")
-		this->followPub(std::stoi(commandDetails.arguments.begin()->second));
-	else if (commandText == "buy")
-		this->sellFilm();
-	else if (commandText == "rate")
-		this->rateFilm();
-	else if (commandText == "comments")
-		this->putComment();
-	else
-		throw new NotFound();
-}
-
-void SystemInterface::processPutCommands(void)
-{
-	if (commandDetails.command == "films") {
-		currentUser->editFilm(commandDetails.arguments);
-		std::cout << "OK" << std::endl;
-	}
-	else
-		throw new NotFound();
-}
-
-void SystemInterface::processDeleteCommands(void)
-{
-	if (commandDetails.command == "films") {
-		this->findFilmById(std::stoi(commandDetails.arguments.begin()->second));
-		currentUser->deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
-		filmBox.deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
-	}
-	else if (commandDetails.command == "comments") {
-		std::vector<std::string> sortedArguments = sortArguments(DELETE_COMMENT);
-		currentUser->deleteComment(std::stoi(sortedArguments[0]), std::stoi(sortedArguments[1]));
-	}
-	else
-		throw new NotFound();
+		case FOLLOWERS:
+			this->followPub(std::stoi(commandDetails.arguments.begin()->second));
+		case BUY: this->sellFilm();
+		case RATE: this->rateFilm();
+		case COMMENTS: this->putComment();
+		case PUT_FILMS:
+			currentUser->editFilm(commandDetails.arguments);
+		case DELETE_FILMS:
+		{
+			this->findFilmById(std::stoi(commandDetails.arguments.begin()->second));
+			currentUser->deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
+			filmBox.deleteFilm(std::stoi(commandDetails.arguments.begin()->second));
+		}
+		case DELETE_COMMENTS:
+		{
+			std::vector<std::string> sortedArguments = sortArguments(DELETE_COMMENT);
+			currentUser->deleteComment(std::stoi(sortedArguments[0]), std::stoi(sortedArguments[1]));
+		}
+		case LOGOUT: this->logout();
+		default:;
 	std::cout << "OK" << std::endl;
+	}
 }
 
 void SystemInterface::processGetCommands(void)
@@ -135,6 +127,8 @@ void SystemInterface::processGetCommands(void)
 		currentUser->showUnreadMessages();
 	else if (commandDetails.command == "notifications read")
 		currentUser->showMessages(std::stoi(commandDetails.arguments.begin()->second));
+	else if (commandDetails.command == "money")
+		currentUser->getBalance();
 	else
 		throw new NotFound();
 }
@@ -143,7 +137,7 @@ void SystemInterface::searchFilms(std::vector<Film*> films)
 {
 	if (!commandDetails.arguments.empty() && commandDetails.arguments.begin()->first == "film_id") {
 		this->findFilmById(std::stoi(commandDetails.arguments.begin()->second))->showDetails();
-		filmBox.showTopFilms(currentUser);
+		filmBox.showRelatedFilms(currentUser, std::stoi(commandDetails.arguments.begin()->second));
 		return;
 	}
 	std::vector<std::string> sortedArguments = sortArguments(SEARCH_FIELDS);
@@ -153,7 +147,7 @@ void SystemInterface::searchFilms(std::vector<Film*> films)
 	std::vector<Film*> searchResault = search(films, sortedArguments[0], std::stoi(sortedArguments[1]),
 		std::stoi(sortedArguments[2]), std::stoi(sortedArguments[3]),
 		std::stoi(sortedArguments[4]), sortedArguments[5]);
-	std::cout << "#. Film Id | Film Name | Film Length | Film price | Rate | Production Year | Film Director" << std::endl;
+	std::cout << SEARCH_RESAULT_TITLE << std::endl;
 	for (int j = 0; j < searchResault.size(); ++j) {
 		std::cout << j + 1 << ". ";
 		searchResault[j]->printInfo();
@@ -164,18 +158,18 @@ void SystemInterface::sellFilm(void)
 {
 	Film* film = this->findFilmById(std::stoi(commandDetails.arguments.begin()->second));
 	currentUser->buyFilm(film);
+	filmBox.updateElements(film->getId(), currentUser);
 	this->calcPortionOfSystem(film);
 	std::string messageContent = "User " + currentUser->getUsername() + " with id " + std::to_string(currentUser->getId()) + " buy your film " + film->getName() + "with id " + std::to_string(film->getId()) + ".";
 	Message* newMessage = new Message(messageContent);
 	film->getPub()->recieveMessage(newMessage);
-	std::cout << "OK" << std::endl;
 }
 
 void SystemInterface::putComment(void)
 {
 	std::vector<std::string> sortedArguments = this->sortArguments(COMMENT_ARGUMENTS);
 	Film* film = findFilmById(std::stoi(sortedArguments[0]));
-	if (currentUser->alreadyHasBoughtFilm(film)) {
+	if (currentUser->alreadyHasBoughtFilm(film->getId())) {
 		film->addNewComment(sortedArguments[1], idManager->makeNewCommentId(film->getId()), currentUser);
 		std::string messageContent = "User " + currentUser->getUsername() + " with id " + std::to_string(currentUser->getId()) + " comment on your film " + film->getName() + " with id " + std::to_string(film->getId());
 		Message* newMessage = new Message(messageContent);
@@ -183,12 +177,11 @@ void SystemInterface::putComment(void)
 	}
 	else
 		throw new PermissionDenied();
-	std::cout << "OK" << std::endl;
 }
 
 void SystemInterface::checkAccessibilityLevel(void)
 {
-	if (currentUser == NO_USER && commandDetails.command != "signup" && commandDetails.command != "login")
+	if (currentUser == ADMIN && commandDetails.command != "signup" && commandDetails.command != "login")
 		throw new PermissionDenied();
 }
 
@@ -228,24 +221,32 @@ void SystemInterface::signup(void)
 	
 	registeredCustomers.push_back(currentUser);
 	accounts.addAccount(userId);
-	std::cout << "OK" << std::endl;
 }
 
 void SystemInterface::login(void)
 {
+	this->checkIfSystemIsFree();
 	std::vector<std::string> sortedArguments = sortArguments(LOGIN_ARGUMENTS);
 	if (sortedArguments.size() != 2)
 		throw new BadRequest();
 	for (int j = 0; j < registeredCustomers.size(); j++)
 		if (registeredCustomers[j]->checkLoginInfo(sortedArguments[0], sortedArguments[1])) {
 				currentUser = registeredCustomers[j];
-				std::cout << "OK" << std::endl;
 				return;
 			}
 }
 
+void SystemInterface::logout(void) 
+{ 
+	if (currentUser != ADMIN)
+		currentUser = ADMIN;
+	else
+		throw new BadRequest();
+}
+
 std::vector<std::string> SystemInterface::handleSignupErrors()
 {
+	this->checkIfSystemIsFree();
 	std::vector<std::string> sortedArguments = sortArguments(SIGNUP_ARGUMENTS);
 	if (sortedArguments.size() != 4 && sortedArguments.size() != 5)
 		throw new BadRequest();
@@ -272,7 +273,6 @@ void SystemInterface::addFilm(void)
 	Film* newFilm = currentUser->addFilm(sortedArguments);
 	newFilm->setId(idManager->makeNewFilmId());
 	filmBox.addFilm(newFilm);
-	std::cout << "OK" << std::endl;
 }
 
 void SystemInterface::followPub(int id)
@@ -304,7 +304,7 @@ void SystemInterface::rateFilm(void)
 {
 	std::vector<std::string> sortedArguments = this->sortArguments(RATE_ARGUMENTS);
 	Film* film = findFilmById(std::stoi(sortedArguments[0]));
-	if (currentUser->alreadyHasBoughtFilm(film)) {
+	if (currentUser->alreadyHasBoughtFilm(film->getId())) {
 		film->addScore(currentUser->getId(), std::stoi(sortedArguments[1]));
 		std::string messageContent = "User " + currentUser->getUsername() + " with id " + std::to_string(currentUser->getId()) + " rate your film " + film->getName() + "with id " + std::to_string(film->getId()) + ".";
 		Message* newMessage = new Message(messageContent);
@@ -312,7 +312,6 @@ void SystemInterface::rateFilm(void)
 	}
 	else
 		throw new PermissionDenied();
-	std::cout << "OK" << std::endl;
 }
 
 void handleInputErrors(std::vector<std::string> separatedCommand)
@@ -334,6 +333,9 @@ void SystemInterface::analizeInput(std::string inputCommand)
 		for (int k = 2; k < separatedCommand.size(); k += 2) {
 			commandDetails.arguments.insert(std::pair<std::string, std::string>(separatedCommand[k], separatedCommand[k + 1]));
 		}
-
+	if (currentUser == ADMIN && commandDetails.title == "GET" && commandDetails.command == "money") {
+		std::cout << money << std::endl;
+		return;
+	}
 	this->checkAccessibilityLevel();
 }

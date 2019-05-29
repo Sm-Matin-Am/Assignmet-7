@@ -18,6 +18,8 @@ public:
 	Film* findFilmById(int id);
 	std::vector<std::string> sortArguments(std::vector<std::string> neededArguments);
 	std::vector<std::string>  handleSignupErrors(void);
+	int findPostCommand(void);
+	void checkIfSystemIsFree(void);
 	void analizeInput(std::string);
 	void checkTitleOfCommand(std::string);
 	void checkBodyOfCommand(std::string);
@@ -27,8 +29,6 @@ public:
 	void checkAccessibilityLevel(void);
 	void processCommand(void);
 	void processPostCommands(void);
-	void processPutCommands(void);
-	void processDeleteCommands(void);
 	void processGetCommands(void);
 	void signup(void);
 	void login(void);
@@ -38,6 +38,7 @@ public:
 	void searchFilms(std::vector<Film*> films);
 	void calcPortionOfSystem(Film* film);
 	void rateFilm(void);
+	void logout(void);
 private:
 	int money;
 	std::vector<Customer*> registeredCustomers;
