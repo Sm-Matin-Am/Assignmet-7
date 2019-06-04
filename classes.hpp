@@ -1,0 +1,10 @@
+class Customer; 
+class Publisher;
+class Film; 
+class FilmRepository; 
+class Bank; 
+class IdSeter; 
+class Message; 
+class Comment; 
+class CommandDetails; 
+class SystemInterface;
